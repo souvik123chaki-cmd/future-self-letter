@@ -31,7 +31,6 @@
     overflow-x: hidden;
   }
 
-  /* subtle starfield */
   .stars{
     position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: 0.5;
     background-image:
@@ -70,7 +69,6 @@
     max-width: 460px; margin: 0 auto 48px;
   }
 
-  /* Envelope hero */
   .envelope-stage{ display:flex; justify-content:center; margin-bottom: 56px; }
   .envelope{
     width: 180px; height: 118px; position: relative;
@@ -93,7 +91,6 @@
     font-family:'Fraunces', serif; font-style:italic; color: #3a2410; font-size:15px;
   }
 
-  /* Form card */
   .card{
     background: var(--ink-panel);
     border: 1px solid rgba(217,164,65,0.18);
@@ -123,6 +120,28 @@
   .row2{ display:grid; grid-template-columns: 1fr 1fr; gap: 18px; }
   @media (max-width: 520px){ .row2{ grid-template-columns: 1fr; } }
 
+  .chip-row{ display:flex; flex-wrap:wrap; gap: 9px; }
+  .chip{
+    background: var(--ink-panel-2); border: 1px solid rgba(236,229,214,0.16);
+    color: var(--off-white); font-family:'Inter', sans-serif; font-size: 13.5px; font-weight:500;
+    padding: 9px 16px; border-radius: 999px; cursor:pointer; transition: all 0.15s ease;
+  }
+  .chip:hover{ border-color: var(--gold); }
+  .chip.selected{
+    background: linear-gradient(180deg, var(--gold), var(--gold-deep));
+    border-color: var(--gold-deep); color: #2c1a06; font-weight:600;
+  }
+
+  .listen-btn{
+    display:inline-flex; align-items:center; gap:7px;
+    background: transparent; border: 1px solid rgba(56,44,34,0.35); color: var(--paper-text);
+    font-family:'Inter', sans-serif; font-size: 13px; font-weight:500;
+    padding: 8px 14px; border-radius: 999px; cursor:pointer; margin-bottom: 20px;
+    transition: all 0.15s ease;
+  }
+  .listen-btn:hover{ border-color: var(--gold-deep); color: var(--gold-deep); }
+  .listen-btn.playing{ background: rgba(181,121,46,0.1); border-color: var(--gold-deep); }
+
   button.send{
     width:100%; padding: 15px 20px; border:none; border-radius: 9px; cursor:pointer;
     background: linear-gradient(180deg, var(--gold), var(--gold-deep));
@@ -137,7 +156,6 @@
 
   .hint{ font-size: 12.5px; color: var(--off-white-dim); text-align:center; margin-top:14px; opacity: 0.75;}
 
-  /* loading */
   .loading{ display:none; text-align:center; padding: 50px 0; }
   .loading.active{ display:block; }
   .stamp-loader{
@@ -148,7 +166,6 @@
   @keyframes spin{ to{ transform: rotate(360deg);} }
   .loading p{ font-family:'IBM Plex Mono', monospace; font-size:13px; color: var(--off-white-dim); letter-spacing:0.03em;}
 
-  /* Letter result */
   .letter-stage{ display:none; margin-top: 10px; }
   .letter-stage.active{ display:block; animation: riseIn 0.6s ease; }
   @keyframes riseIn{ from{ opacity:0; transform: translateY(18px);} to{ opacity:1; transform:none; } }
@@ -163,8 +180,7 @@
   .postmark .dot{ width:5px; height:5px; border-radius:50%; background: var(--gold); }
 
   .paper{
-    background:
-      linear-gradient(var(--paper), var(--paper));
+    background: linear-gradient(var(--paper), var(--paper));
     background-color: var(--paper);
     border-radius: 3px;
     padding: 44px 40px 40px;
@@ -241,8 +257,19 @@
     </div>
 
     <div class="field">
-      <label for="fWorry">One thing weighing on your mind lately <span class="req">*</span></label>
-      <textarea id="fWorry" placeholder="e.g. I'm scared I'm running out of time to figure out my career"></textarea>
+      <label>What's weighing on you most right now? <span class="req">*</span></label>
+      <div class="chip-row" id="stressChips">
+        <button type="button" class="chip" data-value="career">Career</button>
+        <button type="button" class="chip" data-value="relationships">Relationships</button>
+        <button type="button" class="chip" data-value="self-doubt">Self-doubt</button>
+        <button type="button" class="chip" data-value="just tired">Just tired</button>
+        <button type="button" class="chip" data-value="something else">Something else</button>
+      </div>
+    </div>
+
+    <div class="field" id="ventField" style="display:none;">
+      <label for="fVent">Want to say more? Say it exactly how you'd say it to no one else. <span style="color:var(--off-white-dim); font-weight:400;">(optional)</span></label>
+      <textarea id="fVent" placeholder="Whatever's actually on your mind..."></textarea>
     </div>
 
     <div class="field">
@@ -264,6 +291,7 @@
     <div class="postmark"><span class="dot"></span> Delivered across thirty years <span class="dot"></span></div>
     <div class="paper">
       <div class="to-line" id="toLine">To —</div>
+      <button class="listen-btn" id="listenBtn" onclick="toggleListen()">🔊 Listen to it</button>
       <div class="body-text" id="letterBody"></div>
       <div class="sign-off" id="signOff"></div>
     </div>
@@ -278,17 +306,29 @@
 
 <script>
 let currentLetterText = "";
+let selectedStress = "";
+let speaking = false;
+
+document.querySelectorAll('#stressChips .chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('#stressChips .chip').forEach(c => c.classList.remove('selected'));
+    chip.classList.add('selected');
+    selectedStress = chip.dataset.value;
+    const ventField = document.getElementById('ventField');
+    ventField.style.display = 'block';
+  });
+});
 
 async function writeLetter(){
   const name = document.getElementById('fName').value.trim();
   const age = document.getElementById('fAge').value.trim();
-  const worry = document.getElementById('fWorry').value.trim();
+  const ventText = document.getElementById('fVent').value.trim();
   const dream = document.getElementById('fDream').value.trim();
   const errorBox = document.getElementById('errorBox');
   errorBox.classList.remove('active');
 
-  if(!name || !age || !worry || !dream){
-    errorBox.textContent = "Fill in all four before sending it forward.";
+  if(!name || !age || !selectedStress || !dream){
+    errorBox.textContent = "Fill in all fields (and pick what's on your mind) before sending it forward.";
     errorBox.classList.add('active');
     return;
   }
@@ -300,7 +340,7 @@ async function writeLetter(){
     const response = await fetch("/api/generate-letter", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, age, worry, dream })
+      body: JSON.stringify({ name, age, stressType: selectedStress, ventText, dream })
     });
 
     const data = await response.json();
@@ -311,7 +351,17 @@ async function writeLetter(){
 
     if(!letter){ throw new Error("empty"); }
 
-    // split off a sign-off line if present (last non-empty line, short)
+    if(data.crisis){
+      document.getElementById('toLine').textContent = `To ${name}`;
+      document.getElementById('signOff').textContent = "";
+      document.getElementById('loadingBox').classList.remove('active');
+      document.getElementById('letterStage').classList.add('active');
+      document.getElementById('listenBtn').style.display = 'none';
+      typewriteInto(document.getElementById('letterBody'), letter);
+      currentLetterText = letter;
+      return;
+    }
+
     const lines = letter.split("\n").map(l => l.trim()).filter(Boolean);
     let signOff = "";
     let bodyLines = lines;
@@ -353,6 +403,33 @@ function typewriteInto(el, text){
   step();
 }
 
+function toggleListen(){
+  const btn = document.getElementById('listenBtn');
+  if(speaking){
+    window.speechSynthesis.cancel();
+    speaking = false;
+    btn.textContent = "🔊 Listen to it";
+    btn.classList.remove('playing');
+    return;
+  }
+  if(!('speechSynthesis' in window)){ return; }
+  const utterance = new SpeechSynthesisUtterance(currentLetterText);
+  utterance.rate = 0.92;
+  utterance.pitch = 1.0;
+  const voices = window.speechSynthesis.getVoices();
+  const warmVoice = voices.find(v => /female/i.test(v.name) || /samantha|victoria|zira/i.test(v.name));
+  if(warmVoice) utterance.voice = warmVoice;
+  utterance.onend = () => {
+    speaking = false;
+    btn.textContent = "🔊 Listen to it";
+    btn.classList.remove('playing');
+  };
+  window.speechSynthesis.speak(utterance);
+  speaking = true;
+  btn.textContent = "⏸ Pause";
+  btn.classList.add('playing');
+}
+
 function copyLetter(){
   const full = currentLetterText;
   navigator.clipboard.writeText(full).then(() => {
@@ -365,10 +442,18 @@ function copyLetter(){
 }
 
 function resetForm(){
+  window.speechSynthesis.cancel();
+  speaking = false;
+  document.getElementById('listenBtn').textContent = "🔊 Listen to it";
+  document.getElementById('listenBtn').classList.remove('playing');
+  document.getElementById('listenBtn').style.display = 'inline-flex';
   document.getElementById('letterStage').classList.remove('active');
   document.getElementById('formCard').style.display = 'block';
-  document.getElementById('fWorry').value = "";
+  document.getElementById('fVent').value = "";
   document.getElementById('fDream').value = "";
+  document.getElementById('ventField').style.display = 'none';
+  document.querySelectorAll('#stressChips .chip').forEach(c => c.classList.remove('selected'));
+  selectedStress = "";
   document.getElementById('errorBox').classList.remove('active');
 }
 </script>
